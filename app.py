@@ -99,31 +99,34 @@ else:
             enviar = st.form_submit_button("🚀 ENVIAR RELATÓRIO AGORA")
 
             if enviar:
-                novo_relatorio = {
-                    "Data/Hora": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                    "Rota": rota,
-                    "Cliente": cliente,
-                    "KM": km,
-                    "Frete": str(frete),
-                    "Posto": posto,
-                    "Litros": str(litros),
-                    "Observações": obs
-                }
-                
                 try:
-                    # Lê dados atuais
+                    # 1. Cria o registro
+                    novo_relatorio = pd.DataFrame([{
+                        "Data/Hora": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "Rota": rota,
+                        "Cliente": cliente,
+                        "KM": km,
+                        "Frete": str(frete),
+                        "Posto": posto,
+                        "Litros": str(litros),
+                        "Observações": obs
+                    }])
+                    
+                    # 2. Força a leitura atual da planilha (sem cache)
                     df_atual = conn.read(ttl=0)
-                    # Adiciona nova linha
-                    df_novo = pd.concat([df_atual, pd.DataFrame([novo_relatorio])], ignore_index=True)
-                    # Atualiza a planilha
-                    conn.update(data=df_novo)
+                    
+                    # 3. Junta os dados (Garante que mesmo que a planilha esteja vazia, funcione)
+                    if df_atual is not None:
+                        df_final = pd.concat([df_atual, novo_relatorio], ignore_index=True)
+                    else:
+                        df_final = novo_relatorio
+                        
+                    # 4. Grava de volta e LIMPA o cache
+                    conn.update(data=df_final)
+                    st.cache_data.clear() # Esta linha é vital para os dados não "sumirem"
                     
                     st.balloons()
-                    st.success("✅ Relatório enviado com sucesso!")
-                    
-                    # Gerar PDF para o motorista guardar, se quiser
-                    pdf_bytes = gerar_pdf(novo_relatorio)
-                    st.download_button("📄 Baixar comprovante em PDF", data=pdf_bytes, file_name="comprovante_envio.pdf")
-                    
+                    st.success("✅ RELATÓRIO SALVO NA PLANILHA!")
                 except Exception as e:
-                    st.error(f"Erro ao enviar: {e}")
+                    st.error(f"ERRO DE CONEXÃO: {e}")
+                    st.info("Verifique se a planilha está como 'Editor' para 'Qualquer pessoa com o link'.")
